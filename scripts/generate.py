@@ -204,6 +204,7 @@ class Canvas:
         self.step = TYPE_STEP
         self.stops: list[tuple[float, float]] = []
         self.reveal_at: float | None = None
+        self.shell = "mid"
 
     def measure(self, text: str, size: float, weight: str) -> float:
         return self.fonts.face(weight).width(text, size)
@@ -400,9 +401,37 @@ class Canvas:
         return (
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{self.width}" height="{height}" '
             f'viewBox="0 0 {self.width} {height}">'
-            f'<rect width="{self.width}" height="{height}" fill="{BG}"/>'
-            f"{body}</svg>\n"
+            f"{self.shell_frame(height)}{body}</svg>\n"
         )
+
+    def shell_frame(self, height: int) -> str:
+        w = self.width
+        h = height
+        r = 12
+        stroke = "#4a4646"
+        if self.shell == "top":
+            fill = (
+                f'<path d="M0,{h}H{w}V{r}Q{w},0 {w - r},0H{r}Q0,0 0,{r}Z" fill="{BG}"/>'
+            )
+            edge = (
+                f'<path d="M0.5,{h}V{r}Q0.5,0.5 {r},0.5H{w - r}Q{w - 0.5},0.5 {w - 0.5},{r}V{h}" '
+                f'fill="none" stroke="{stroke}" stroke-width="1"/>'
+            )
+        elif self.shell == "bottom":
+            fill = (
+                f'<path d="M0,0H{w}V{h - r}Q{w},{h} {w - r},{h}H{r}Q0,{h} 0,{h - r}Z" fill="{BG}"/>'
+            )
+            edge = (
+                f'<path d="M0.5,0V{h - r}Q0.5,{h - 0.5} {r},{h - 0.5}H{w - r}'
+                f'Q{w - 0.5},{h - 0.5} {w - 0.5},{h - r}V0" '
+                f'fill="none" stroke="{stroke}" stroke-width="1"/>'
+            )
+        else:
+            fill = f'<rect width="{w}" height="{h}" fill="{BG}"/>'
+            edge = (
+                f'<path d="M0.5,0V{h}M{w - 0.5},0V{h}" fill="none" stroke="{stroke}" stroke-width="1"/>'
+            )
+        return fill + edge
 
 
 def icon_paths(icon: str) -> list[str]:
@@ -465,6 +494,7 @@ def draw_chip(canvas: Canvas, fonts: Fonts, label: str, style: dict, x: float, y
 
 def build_title(fonts: Fonts, content: dict, spec: dict, animate: bool) -> str:
     canvas = Canvas(fonts, spec)
+    canvas.shell = "top"
     canvas.typing = animate
     canvas.spacer(14 if spec["name"] == "desktop" else 12)
     size = spec["title"]
@@ -498,8 +528,11 @@ def build_intro(fonts: Fonts, content: dict, spec: dict, reveal: float | None) -
     return canvas.finish(4 if spec["name"] == "desktop" else 4, "intro")
 
 
-def build_group(fonts: Fonts, content: dict, group: dict, spec: dict, reveal: float | None) -> str:
+def build_group(
+    fonts: Fonts, content: dict, group: dict, spec: dict, reveal: float | None, shell: str = "mid"
+) -> str:
     canvas = Canvas(fonts, spec)
+    canvas.shell = shell
     canvas.reveal_at = reveal
     nest(canvas, spec, 2)
     canvas.spacer(2)
@@ -552,7 +585,9 @@ def build_contact(fonts: Fonts, content: dict, contact: dict, spec: dict, reveal
         f'<line x1="{canvas.pad + prefix:.2f}" y1="{underline_y}" x2="{end:.2f}" y2="{underline_y}" '
         'stroke="#fdfcfc" stroke-width="1"/>'
     )
-    bottom = 8 if contact["id"] == "website" else 0
+    # The email row must be at least as tall as GitHub's link line box,
+    # or the browser underline opens a light gap before the next image.
+    bottom = 14 if contact["id"] == "email" else 8
     return canvas.finish(bottom, contact["id"])
 
 
@@ -609,7 +644,7 @@ def linked(href: str, title: str, inner: str) -> str:
     )
 
 
-ASSET_REV = "4"
+ASSET_REV = "5"
 
 
 def asset(path: str) -> str:
@@ -752,8 +787,14 @@ def render_all(fonts: Fonts, content: dict, spec: dict) -> dict[str, str]:
             fonts, content["stack"]["label"], spec, 12, reveal("stack")
         )
         for group in content["stack"]["groups"]:
+            last_group = content["stack"]["groups"][-1]["id"]
             assets[f"group-{group['id']}{suffix}.svg"] = build_group(
-                fonts, content, group, spec, reveal(group["id"])
+                fonts,
+                content,
+                group,
+                spec,
+                reveal(group["id"]),
+                "bottom" if group["id"] == last_group else "mid",
             )
         for contact in content["contacts"]:
             assets[f"contact-{contact['id']}{suffix}.svg"] = build_contact(
