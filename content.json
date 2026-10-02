@@ -1,0 +1,90 @@
+{
+  "email": "junguang.jia@columbia.edu",
+  "website": "https://junguangjia.github.io/",
+  "heading": {
+    "desktop": ["software · systems · machine learning"],
+    "mobile": ["software · systems", "machine learning"]
+  },
+  "intro": "I build full-stack applications, native tools, and computational software.",
+  "selected": {
+    "label": "selected",
+    "projects": [
+      {
+        "id": "artvenn",
+        "name": "ArtVenn",
+        "description": "A full-stack application for structured data, search, media management, and publishing.",
+        "tags": ["TypeScript", "PostgreSQL", "Search", "Publishing"],
+        "href": "https://github.com/junguangjia/moya-inscriptions-web",
+        "alt": "ArtVenn. A full-stack application for structured data, search, media management, and publishing."
+      },
+      {
+        "id": "audio",
+        "name": "Audio Transcribe",
+        "description": "A local-first macOS transcription app built with Swift and whisper.cpp.",
+        "tags": ["Swift", "whisper.cpp"],
+        "href": "https://github.com/junguangjia/audio-transcribe",
+        "alt": "Audio Transcribe. A local-first macOS transcription app built with Swift and whisper.cpp."
+      },
+      {
+        "id": "trace",
+        "name": "Stochastic Trace Estimation",
+        "description": "Julia implementations and reproducible experiments for randomized trace estimation.",
+        "tags": ["Julia", "Numerical Computing"],
+        "href": "https://github.com/junguangjia/stochastic-trace-estimation",
+        "alt": "Stochastic Trace Estimation. Julia implementations and reproducible experiments for randomized trace estimation."
+      }
+    ]
+  },
+  "stack": {
+    "label": "stack",
+    "groups": [
+      {
+        "id": "languages",
+        "label": "Languages",
+        "items": ["typescript", "swift", "python", "julia", "r", "sql"]
+      },
+      {
+        "id": "web",
+        "label": "Web & Data",
+        "items": ["react", "nextjs", "postgresql"]
+      },
+      {
+        "id": "platforms",
+        "label": "Platforms & Infrastructure",
+        "items": ["web", "macos", "linux", "docker", "githubactions"]
+      }
+    ]
+  },
+  "badges": {
+    "typescript": "TypeScript",
+    "swift": "Swift",
+    "python": "Python",
+    "julia": "Julia",
+    "r": "R",
+    "sql": "SQL",
+    "react": "React",
+    "nextjs": "Next.js",
+    "postgresql": "PostgreSQL",
+    "web": "Web",
+    "macos": "macOS",
+    "linux": "Linux",
+    "docker": "Docker",
+    "githubactions": "GitHub Actions"
+  },
+  "contacts": [
+    {
+      "id": "email",
+      "prompt": "email",
+      "text": "junguang.jia@columbia.edu",
+      "href": "mailto:junguang.jia@columbia.edu",
+      "title": "mailto:junguang.jia@columbia.edu"
+    },
+    {
+      "id": "website",
+      "prompt": "web",
+      "text": "junguangjia.github.io",
+      "href": "https://junguangjia.github.io/",
+      "title": "https://junguangjia.github.io/"
+    }
+  ]
+}
