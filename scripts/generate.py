@@ -37,31 +37,31 @@ ROOT = Path(__file__).resolve().parents[1]
 
 DESKTOP = {
     "name": "desktop",
-    "width": 736,
-    "pad": 28,
-    "title": 28,
-    "body": 16,
-    "heading": 16,
-    "tag": 14,
-    "group": 14,
+    "width": 960,
+    "pad": 22,
+    "title": 20,
+    "body": 13,
+    "heading": 13,
+    "tag": 12,
+    "group": 13,
 }
 MOBILE = {
     "name": "mobile",
     "width": 340,
-    "pad": 16,
-    "title": 24,
-    "body": 15,
-    "heading": 15,
-    "tag": 13,
-    "group": 14,
+    "pad": 14,
+    "title": 20,
+    "body": 13,
+    "heading": 13,
+    "tag": 12,
+    "group": 13,
 }
 
 ICONS = ROOT / "icons"
-CHIP_H = 30
-CHIP_LOGO = 15
-CHIP_PAD = 9
-CHIP_GAP = 8
-CHIP_TEXT = 13
+CHIP_H = 24
+CHIP_LOGO = 12
+CHIP_PAD = 7
+CHIP_GAP = 6
+CHIP_TEXT = 11
 CHIP_RADIUS = 3
 
 # Brand color is limited to the logo or the chip fill. Labels stay in IBM Plex Mono.
@@ -186,7 +186,7 @@ def reveal_animation(when: float) -> str:
 
 
 def nest(canvas: "Canvas", spec: dict, level: int) -> None:
-    unit = 20 if spec["name"] == "desktop" else 12
+    unit = 16 if spec["name"] == "desktop" else 10
     canvas.pad = spec["pad"] + level * unit
 
 
@@ -466,7 +466,7 @@ def draw_chip(canvas: Canvas, fonts: Fonts, label: str, style: dict, x: float, y
 def build_title(fonts: Fonts, content: dict, spec: dict, animate: bool) -> str:
     canvas = Canvas(fonts, spec)
     canvas.typing = animate
-    canvas.spacer(22 if spec["name"] == "desktop" else 16)
+    canvas.spacer(14 if spec["name"] == "desktop" else 12)
     size = spec["title"]
     lines = content["heading"][spec["name"]]
     for index, line in enumerate(lines):
@@ -484,8 +484,8 @@ def build_title(fonts: Fonts, content: dict, spec: dict, animate: bool) -> str:
                 f"Heading does not fit the {spec['name']} module "
                 f"({cursor_end:.1f}px > {limit:.1f}px)."
             )
-    canvas.spacer(8 if spec["name"] == "desktop" else 6)
-    return canvas.finish(4, "title")
+    canvas.spacer(4 if spec["name"] == "desktop" else 4)
+    return canvas.finish(2, "title")
 
 
 def build_intro(fonts: Fonts, content: dict, spec: dict, reveal: float | None) -> str:
@@ -494,17 +494,17 @@ def build_intro(fonts: Fonts, content: dict, spec: dict, reveal: float | None) -
     nest(canvas, spec, 1)
     canvas.spacer(4)
     canvas.wrapped(content["intro"], spec["body"], "regular", TEXT, 1.6)
-    canvas.spacer(6)
-    return canvas.finish(8 if spec["name"] == "desktop" else 6, "intro")
+    canvas.spacer(2)
+    return canvas.finish(4 if spec["name"] == "desktop" else 4, "intro")
 
 
 def build_group(fonts: Fonts, content: dict, group: dict, spec: dict, reveal: float | None) -> str:
     canvas = Canvas(fonts, spec)
     canvas.reveal_at = reveal
     nest(canvas, spec, 2)
+    canvas.spacer(2)
+    canvas.line([(group["label"], TEXT, "bold")], spec["group"], 1.25)
     canvas.spacer(6)
-    canvas.line([(group["label"], TEXT, "bold")], spec["group"], 1.3)
-    canvas.spacer(8)
     nest(canvas, spec, 3)
     x = float(canvas.pad)
     y = canvas.y
@@ -523,14 +523,14 @@ def build_group(fonts: Fonts, content: dict, group: dict, spec: dict, reveal: fl
         draw_chip(canvas, fonts, label, style, x, y)
         x += width + CHIP_GAP
     canvas.y = row_bottom
-    return canvas.finish(10, group["id"])
+    return canvas.finish(6, group["id"])
 
 
 def build_contact(fonts: Fonts, content: dict, contact: dict, spec: dict, reveal: float | None) -> str:
     canvas = Canvas(fonts, spec)
     canvas.reveal_at = reveal
     nest(canvas, spec, 1)
-    size = spec["body"] if spec["name"] == "desktop" else 14
+    size = spec["body"]
     canvas.spacer(1)
     end = canvas.line(
         [
@@ -563,24 +563,24 @@ def build_heading(fonts: Fonts, label: str, spec: dict, first_gap: float, reveal
     canvas.spacer(first_gap)
     size = spec["heading"]
     canvas.line([("# ", MUTED, "regular"), (label, TEXT, "bold")], size, 1.35)
-    canvas.spacer(8)
+    canvas.spacer(4)
     canvas.rule()
-    return canvas.finish(10 if spec["name"] == "desktop" else 8, "heading")
+    return canvas.finish(6 if spec["name"] == "desktop" else 6, "heading")
 
 
 def build_project(fonts: Fonts, project: dict, spec: dict, reveal: float | None) -> str:
     canvas = Canvas(fonts, spec)
     canvas.reveal_at = reveal
     nest(canvas, spec, 2)
-    canvas.spacer(12 if spec["name"] == "desktop" else 8)
+    canvas.spacer(8 if spec["name"] == "desktop" else 6)
     size = spec["heading"]
-    canvas.line([("## ", MUTED, "regular"), (project["name"], TEXT, "bold")], size, 1.35)
-    canvas.spacer(8)
+    canvas.line([("## ", MUTED, "regular"), (project["name"], TEXT, "bold")], size, 1.3)
+    canvas.spacer(4)
     nest(canvas, spec, 3)
-    canvas.wrapped(project["description"], spec["body"], "regular", TEXT, 1.55)
-    canvas.spacer(8)
+    canvas.wrapped(project["description"], spec["body"], "regular", TEXT, 1.45)
+    canvas.spacer(4)
     canvas.tags(project["tags"], spec["tag"])
-    return canvas.finish(10 if spec["name"] == "desktop" else 6, "project")
+    return canvas.finish(6 if spec["name"] == "desktop" else 4, "project")
 
 
 def picture(
