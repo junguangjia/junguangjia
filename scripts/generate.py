@@ -191,7 +191,8 @@ def nest(canvas: "Canvas", spec: dict, level: int) -> None:
 
 
 def shell_pad(spec: dict) -> float:
-    return 36 if spec["name"] == "desktop" else 22
+    # Equal outer margin above the title letters and below the last badge row.
+    return 72 if spec["name"] == "desktop" else 44
 
 
 class Canvas:
@@ -503,7 +504,9 @@ def build_title(fonts: Fonts, content: dict, spec: dict, animate: bool) -> str:
     size = spec["title"]
     box = max(size * 1.15, size * (ASCENT + DESCENT) / UPEM)
     above_caps = box - size * DESCENT / UPEM - size * 0.70
-    canvas.spacer(max(8, shell_pad(spec) - above_caps))
+    # The line box sits a little above the letters. Offset so the letter tops
+    # land shell_pad below the panel edge.
+    canvas.spacer(shell_pad(spec) - above_caps - 3.8)
     lines = content["heading"][spec["name"]]
     for index, line in enumerate(lines):
         end = canvas.line([(line, TEXT, "bold")], size, 1.15)
@@ -651,7 +654,7 @@ def linked(href: str, title: str, inner: str) -> str:
     )
 
 
-ASSET_REV = "6"
+ASSET_REV = "7"
 
 
 def asset(path: str) -> str:
