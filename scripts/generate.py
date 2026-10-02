@@ -609,17 +609,24 @@ def linked(href: str, title: str, inner: str) -> str:
     )
 
 
+ASSET_REV = "4"
+
+
+def asset(path: str) -> str:
+    return f"{path}?v={ASSET_REV}"
+
+
 def module(name: str, alt: str) -> str:
     return picture(
-        f"assets/{name}.svg",
-        f"assets/mobile/{name}.svg",
+        asset(f"assets/{name}.svg"),
+        asset(f"assets/mobile/{name}.svg"),
         alt,
         [
             (
                 "(max-width: 720px) and (prefers-reduced-motion: reduce)",
-                f"assets/mobile/{name}-static.svg",
+                asset(f"assets/mobile/{name}-static.svg"),
             ),
-            ("(prefers-reduced-motion: reduce)", f"assets/{name}-static.svg"),
+            ("(prefers-reduced-motion: reduce)", asset(f"assets/{name}-static.svg")),
         ],
     )
 
