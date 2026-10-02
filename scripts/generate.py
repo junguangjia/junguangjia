@@ -190,6 +190,10 @@ def nest(canvas: "Canvas", spec: dict, level: int) -> None:
     canvas.pad = spec["pad"] + level * unit
 
 
+def shell_pad(spec: dict) -> float:
+    return 36 if spec["name"] == "desktop" else 22
+
+
 class Canvas:
     def __init__(self, fonts: Fonts, spec: dict) -> None:
         self.fonts = fonts
@@ -496,8 +500,10 @@ def build_title(fonts: Fonts, content: dict, spec: dict, animate: bool) -> str:
     canvas = Canvas(fonts, spec)
     canvas.shell = "top"
     canvas.typing = animate
-    canvas.spacer(14 if spec["name"] == "desktop" else 12)
     size = spec["title"]
+    box = max(size * 1.15, size * (ASCENT + DESCENT) / UPEM)
+    above_caps = box - size * DESCENT / UPEM - size * 0.70
+    canvas.spacer(max(8, shell_pad(spec) - above_caps))
     lines = content["heading"][spec["name"]]
     for index, line in enumerate(lines):
         end = canvas.line([(line, TEXT, "bold")], size, 1.15)
@@ -556,7 +562,8 @@ def build_group(
         draw_chip(canvas, fonts, label, style, x, y)
         x += width + CHIP_GAP
     canvas.y = row_bottom
-    return canvas.finish(6, group["id"])
+    bottom = shell_pad(spec) if canvas.shell == "bottom" else 6
+    return canvas.finish(bottom, group["id"])
 
 
 def build_contact(fonts: Fonts, content: dict, contact: dict, spec: dict, reveal: float | None) -> str:
@@ -644,7 +651,7 @@ def linked(href: str, title: str, inner: str) -> str:
     )
 
 
-ASSET_REV = "5"
+ASSET_REV = "6"
 
 
 def asset(path: str) -> str:
