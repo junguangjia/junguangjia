@@ -414,12 +414,15 @@ class Canvas:
         h = height
         r = 12
         stroke = "#4a4646"
+        # Keep the stroke fully inside the viewBox. A stroke centered on the
+        # image boundary is clipped differently in each slice, so the mobile
+        # edge looks bent instead of straight.
+        inset = 1.5
         if self.shell == "top":
-            fill = (
-                f'<path d="M0,{h}H{w}V{r}Q{w},0 {w - r},0H{r}Q0,0 0,{r}Z" fill="{BG}"/>'
-            )
+            fill = f'<path d="M0,{h}H{w}V{r}Q{w},0 {w - r},0H{r}Q0,0 0,{r}Z" fill="{BG}"/>'
             edge = (
-                f'<path d="M0.5,{h}V{r}Q0.5,0.5 {r},0.5H{w - r}Q{w - 0.5},0.5 {w - 0.5},{r}V{h}" '
+                f'<path d="M{inset},{h}V{r}Q{inset},{inset} {r},{inset}H{w - r}'
+                f'Q{w - inset},{inset} {w - inset},{r}V{h}" '
                 f'fill="none" stroke="{stroke}" stroke-width="1"/>'
             )
         elif self.shell == "bottom":
@@ -427,14 +430,15 @@ class Canvas:
                 f'<path d="M0,0H{w}V{h - r}Q{w},{h} {w - r},{h}H{r}Q0,{h} 0,{h - r}Z" fill="{BG}"/>'
             )
             edge = (
-                f'<path d="M0.5,0V{h - r}Q0.5,{h - 0.5} {r},{h - 0.5}H{w - r}'
-                f'Q{w - 0.5},{h - 0.5} {w - 0.5},{h - r}V0" '
+                f'<path d="M{inset},0V{h - r}Q{inset},{h - inset} {r},{h - inset}H{w - r}'
+                f'Q{w - inset},{h - inset} {w - inset},{h - r}V0" '
                 f'fill="none" stroke="{stroke}" stroke-width="1"/>'
             )
         else:
             fill = f'<rect width="{w}" height="{h}" fill="{BG}"/>'
             edge = (
-                f'<path d="M0.5,0V{h}M{w - 0.5},0V{h}" fill="none" stroke="{stroke}" stroke-width="1"/>'
+                f'<path d="M{inset},0V{h}M{w - inset},0V{h}" fill="none" '
+                f'stroke="{stroke}" stroke-width="1"/>'
             )
         return fill + edge
 
@@ -654,7 +658,7 @@ def linked(href: str, title: str, inner: str) -> str:
     )
 
 
-ASSET_REV = "7"
+ASSET_REV = "8"
 
 
 def asset(path: str) -> str:
