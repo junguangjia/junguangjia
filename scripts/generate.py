@@ -39,9 +39,9 @@ DESKTOP = {
     "name": "desktop",
     "width": 960,
     "pad": 22,
-    "title": 20,
-    "body": 13,
-    "heading": 13,
+    "title": 22,
+    "body": 14,
+    "heading": 14,
     "tag": 12,
     "group": 13,
 }
@@ -57,11 +57,11 @@ MOBILE = {
 }
 
 ICONS = ROOT / "icons"
-CHIP_H = 24
-CHIP_LOGO = 12
-CHIP_PAD = 7
+CHIP_H = 26
+CHIP_LOGO = 13
+CHIP_PAD = 8
 CHIP_GAP = 6
-CHIP_TEXT = 11
+CHIP_TEXT = 12
 CHIP_RADIUS = 3
 
 # Brand color is limited to the logo or the chip fill. Labels stay in IBM Plex Mono.
@@ -618,15 +618,15 @@ def asset(path: str) -> str:
 
 def module(name: str, alt: str) -> str:
     return picture(
-        asset(f"assets/{name}.svg"),
-        asset(f"assets/mobile/{name}.svg"),
+        asset(f"readme/{name}.svg"),
+        asset(f"readme/mobile/{name}.svg"),
         alt,
         [
             (
                 "(max-width: 720px) and (prefers-reduced-motion: reduce)",
-                asset(f"assets/mobile/{name}-static.svg"),
+                asset(f"readme/mobile/{name}-static.svg"),
             ),
-            ("(prefers-reduced-motion: reduce)", asset(f"assets/{name}-static.svg")),
+            ("(prefers-reduced-motion: reduce)", asset(f"readme/{name}-static.svg")),
         ],
     )
 
@@ -794,7 +794,7 @@ def validate(root: Path, content: dict) -> None:
     names = [project["name"] for project in content["selected"]["projects"]]
     if names != ["ArtVenn", "Audio Transcribe", "Stochastic Trace Estimation"]:
         raise SystemExit(f"Unexpected project list: {names}")
-    svgs = list((root / "assets").rglob("*.svg"))
+    svgs = list((root / "readme").rglob("*.svg"))
     if len(svgs) < 10:
         raise SystemExit("Too few SVG assets")
     for path in svgs:
@@ -809,10 +809,10 @@ def validate(root: Path, content: dict) -> None:
             raise SystemExit(f"{path} has no outlined text")
         if path.stat().st_size > 180_000:
             raise SystemExit(f"{path} is {path.stat().st_size} bytes")
-    animated = (root / "assets" / "title.svg").read_text(encoding="utf-8")
-    static = (root / "assets" / "title-static.svg").read_text(encoding="utf-8")
-    intro = (root / "assets" / "intro.svg").read_text(encoding="utf-8")
-    intro_static = (root / "assets" / "intro-static.svg").read_text(encoding="utf-8")
+    animated = (root / "readme" / "title.svg").read_text(encoding="utf-8")
+    static = (root / "readme" / "title-static.svg").read_text(encoding="utf-8")
+    intro = (root / "readme" / "intro.svg").read_text(encoding="utf-8")
+    intro_static = (root / "readme" / "intro-static.svg").read_text(encoding="utf-8")
     if 'dur="1.1s"' not in animated or "<animate " not in animated or 'id="cursor"' not in animated:
         raise SystemExit("Heading cursor animation is missing")
     if animated.count("<animate ") < 10:
@@ -844,7 +844,10 @@ def main() -> None:
     if "SIL Open Font License" not in regular.license or regular.fs_type != 0:
         raise SystemExit("Refusing to outline a font whose license or embedding bits are unexpected")
 
-    assets = root / "assets"
+    old_assets = root / "assets"
+    if old_assets.exists():
+        shutil.rmtree(old_assets)
+    assets = root / "readme"
     if assets.exists():
         shutil.rmtree(assets)
     (assets / "mobile").mkdir(parents=True)
@@ -856,7 +859,7 @@ def main() -> None:
     validate(root, content)
 
     print(f"IBM Plex Mono {fonts.face('bold').font['name'].getDebugName(5)}")
-    total = sum(path.stat().st_size for path in assets.rglob("*.svg"))
+    total = sum(path.stat().st_size for path in (root / "readme").rglob("*.svg"))
     print(f"svg bytes: {total}")
 
 
