@@ -4,7 +4,7 @@ This repository is the GitHub profile README for [junguangjia](https://github.co
 
 ## Edit the copy
 
-Change `content.json`, then regenerate. Do not draw SVG paths by hand. The script rewrites `README.md` and `assets/`.
+Change `content.json`, then regenerate. Do not draw SVG paths by hand. The script rewrites `README.md` and `readme/`.
 
 ```sh
 python3 scripts/generate.py --font "$IBM_PLEX_MONO_OTF"
@@ -32,14 +32,15 @@ Weights used: Regular, Medium, and Bold. `fsType` is 0.
 
 ## What the generator writes
 
-- Desktop SVGs in `assets/`
-- Narrow SVGs in `assets/mobile/`, selected with `<picture>` at a 720px viewport
-- A static heading for `prefers-reduced-motion`
+- One desktop card, `readme/panel.svg`, and one narrow card, `readme/mobile/panel.svg`, selected with `<picture>` at a 720px viewport
+- A static card for `prefers-reduced-motion`
 - The same words again in the Text version at the bottom of `README.md`
+
+The card is a single SVG. Separate images were landing at slightly different widths on the GitHub iOS app, so the left and right edges stepped at every join. Email, website, and project links are in the text version, because one picture can only have one destination.
 
 The heading is `software · systems · machine learning`, with a separate blinking underscore in the next monospace cell. On a narrow screen it breaks before “machine learning” so the type stays readable. The heading types out like a command, then the indented lines appear in order, like a program printing. The cursor keeps its 1.1-second blink. Reduced motion, and any viewer where animation does not run, shows the finished text immediately. Website and email are indented code lines: `email > junguang.jia@columbia.edu` and `web > junguangjia.github.io`.
 
-Badge labels are outlined from the same font. Logo paths are embedded in the badge SVGs. `icons/NOTICE.md` records the Simple Icons CC0 sources. SQL is a generic database symbol. macOS is text only, without the Apple logo. The email and web lines are separate links.
+Badge labels are outlined from the same font. Logo paths are embedded in the card. `icons/NOTICE.md` records the Simple Icons CC0 sources. SQL is a generic database symbol. macOS is text only, without the Apple logo. The email and web lines are typed in the card; the text version links them.
 
 ## What the profile names
 
