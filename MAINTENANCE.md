@@ -36,7 +36,7 @@ Weights used: Regular, Medium, and Bold. `fsType` is 0.
 - A static card for `prefers-reduced-motion`
 - The same words again in the Text version at the bottom of `README.md`
 
-The card is a single SVG. Separate images were landing at slightly different widths on the GitHub iOS app, so the left and right edges stepped at every join. Email, website, and project links are in the text version, because one picture can only have one destination.
+The heading and introduction are one SVG, so that card has a single edge. The project list is separate pictures that share one pixel width, with no side stroke, so the phone does not step the border. Email and the website are real text links under that heading: the address can be selected and copied, and each address opens. Each project picture is a link. The text version repeats the same links.
 
 The heading is `software · systems · machine learning`, with a separate blinking underscore in the next monospace cell. On a narrow screen it breaks before “machine learning” so the type stays readable. The heading types out like a command, then the indented lines appear in order, like a program printing. The cursor keeps its 1.1-second blink. Reduced motion, and any viewer where animation does not run, shows the finished text immediately. Website and email are indented code lines: `email > junguang.jia@columbia.edu` and `web > junguangjia.github.io`.
 

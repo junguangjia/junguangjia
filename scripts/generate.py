@@ -416,21 +416,28 @@ def rounded_rect(x: float, y: float, w: float, h: float, r: float) -> str:
     )
 
 
-def panel_frame(width: int, height: int) -> str:
-    """One filled card. A border on each stacked image steps on phones."""
-    radius = 12
-    border = 2
-    if height <= radius * 2 + border * 2:
-        raise SystemExit(f"Panel is too short for the frame: {height}")
-    outer = rounded_rect(0, 0, width, height, radius)
-    inner = rounded_rect(border, border, width - 2 * border, height - 2 * border, radius - border)
-    return (
-        f'<path d="{outer}" fill="{BG}"/>'
-        f'<path d="{outer}{inner}" fill="#4a4646" fill-rule="evenodd"/>'
-    )
+def piece_frame(width: int, height: int, shape: str) -> str:
+    """Filled card edge. No per-slice stroke, so a phone cannot step the border."""
+    radius = 12 if height > 28 else max(4, height // 4)
+    if shape == "all":
+        path = rounded_rect(0, 0, width, height, radius)
+    elif shape == "top":
+        path = (
+            f"M0,{height}H{width}V{radius}"
+            f"Q{width},0 {width - radius},0H{radius}Q0,0 0,{radius}Z"
+        )
+    elif shape == "bottom":
+        path = (
+            f"M0,0H{width}V{height - radius}"
+            f"Q{width},{height} {width - radius},{height}H{radius}"
+            f"Q0,{height} 0,{height - radius}Z"
+        )
+    else:
+        return f'<rect width="{width}" height="{height}" fill="{BG}"/>'
+    return f'<path d="{path}" fill="{BG}"/>'
 
 
-def compose_panel(width: int, pieces: list[tuple[float, str]]) -> str:
+def compose(width: int, pieces: list[tuple[float, str]], shape: str) -> str:
     y = 0.0
     groups: list[str] = []
     for height, body in pieces:
@@ -440,7 +447,7 @@ def compose_panel(width: int, pieces: list[tuple[float, str]]) -> str:
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{pixel_height}" '
         f'viewBox="0 0 {width} {pixel_height}">'
-        f"{panel_frame(width, pixel_height)}{''.join(groups)}</svg>\n"
+        f"{piece_frame(width, pixel_height, shape)}{''.join(groups)}</svg>\n"
     )
 
 
@@ -630,7 +637,9 @@ def build_project(fonts: Fonts, project: dict, spec: dict, reveal: float | None)
     canvas.wrapped(project["description"], spec["body"], "regular", TEXT, 1.45)
     canvas.spacer(4)
     canvas.tags(project["tags"], spec["tag"])
-    return canvas.finish(6 if spec["name"] == "desktop" else 4, "project")
+    # GitHub draws the link underline under the image. Extra dark padding
+    # keeps that line from opening a light gap before the next slice.
+    return canvas.finish(16 if spec["name"] == "desktop" else 14, "project")
 
 
 def picture(
@@ -638,16 +647,17 @@ def picture(
     mobile: str,
     alt: str,
     sources: list[tuple[str, str]] | None = None,
-    full: bool = True,
 ) -> str:
     extra = ""
     if sources:
         extra = "".join(f'<source media="{media}" srcset="{src}">' for media, src in sources)
-    width = ' width="100%"' if full else ""
+    # One shared pixel width. A percentage width was resolving to a different
+    # size for each slice in the GitHub iOS app, which stepped the card edge.
     return (
         f'<picture>{extra}'
         f'<source media="(max-width: 720px)" srcset="{mobile}">'
-        f'<img src="{desktop}"{width} align="top" alt="{html.escape(alt, quote=True)}">'
+        f'<img src="{desktop}" width="{DESKTOP["width"]}" align="top" '
+        f'alt="{html.escape(alt, quote=True)}">'
         f"</picture>"
     )
 
@@ -659,7 +669,7 @@ def linked(href: str, title: str, inner: str) -> str:
     )
 
 
-ASSET_REV = "9"
+ASSET_REV = "10"
 
 
 def asset(path: str) -> str:
@@ -685,21 +695,36 @@ def contact_line(contact: dict) -> str:
     return f"{contact['prompt']} > {contact['text']}"
 
 
-def panel_alt(content: dict) -> str:
-    projects = ", ".join(project["name"] for project in content["selected"]["projects"])
-    contacts = ". ".join(contact_line(contact) for contact in content["contacts"])
-    return (
-        "software · systems · machine learning. "
-        f"{content['intro']} {contacts}. "
-        f"Selected: {projects}."
-    )
+def contact_html(content: dict) -> str:
+    """Real text, so the address can be selected and each contact is a link."""
+    lines = []
+    for contact in content["contacts"]:
+        lines.append(
+            "<code>"
+            f'{html.escape(contact["prompt"])} &gt; '
+            f'<a href="{html.escape(contact["href"], quote=True)}">'
+            f'{html.escape(contact["text"])}</a>'
+            "</code>"
+        )
+    return "<p>" + "<br>\n".join(lines) + "</p>"
 
 
 def build_readme(content: dict) -> str:
+    body = [module("heading-selected", "Selected")]
+    for project in content["selected"]["projects"]:
+        body.append(linked(project["href"], project["alt"], module(f"project-{project['id']}", project["alt"])))
+    body.append(module("heading-stack", "Stack"))
+    for group in content["stack"]["groups"]:
+        labels = ", ".join(content["badges"][item] for item in group["items"])
+        body.append(module(f"group-{group['id']}", f"{group['label']}: {labels}"))
     parts = [
         "<!-- Outlined with IBM Plex Mono. Edit content.json and regenerate. -->",
         "<p>",
-        module("panel", panel_alt(content)),
+        module("header", "software · systems · machine learning. " + content["intro"]),
+        "</p>",
+        contact_html(content),
+        "<p>",
+        "".join(body),
         "</p>",
         text_version(content),
     ]
@@ -785,28 +810,43 @@ def render_all(fonts: Fonts, content: dict, spec: dict) -> dict[str, str]:
     for motion in (True, False):
         suffix = "" if motion else "-static"
         reveal = (lambda key: times[key]) if motion else (lambda key: None)
-        pieces = [
-            build_title(fonts, content, spec, animate=motion),
-            build_intro(fonts, content, spec, reveal("intro")),
-        ]
-        for contact in content["contacts"]:
-            pieces.append(build_contact(fonts, content, contact, spec, reveal(contact["id"])))
-        pieces.append(build_heading(fonts, content["selected"]["label"], spec, 14, reveal("selected")))
+        assets[f"header{suffix}.svg"] = compose(
+            spec["width"],
+            [
+                build_title(fonts, content, spec, animate=motion),
+                build_intro(fonts, content, spec, reveal("intro")),
+            ],
+            "all",
+        )
+        assets[f"heading-selected{suffix}.svg"] = compose(
+            spec["width"],
+            [build_heading(fonts, content["selected"]["label"], spec, 14, reveal("selected"))],
+            "top",
+        )
         for project in content["selected"]["projects"]:
-            pieces.append(build_project(fonts, project, spec, reveal(project["id"])))
-        pieces.append(build_heading(fonts, content["stack"]["label"], spec, 12, reveal("stack")))
+            assets[f"project-{project['id']}{suffix}.svg"] = compose(
+                spec["width"],
+                [build_project(fonts, project, spec, reveal(project["id"]))],
+                "mid",
+            )
+        assets[f"heading-stack{suffix}.svg"] = compose(
+            spec["width"],
+            [build_heading(fonts, content["stack"]["label"], spec, 12, reveal("stack"))],
+            "mid",
+        )
         for group in content["stack"]["groups"]:
-            pieces.append(
-                build_group(
+            assets[f"group-{group['id']}{suffix}.svg"] = compose(
+                spec["width"],
+                [build_group(
                     fonts,
                     content,
                     group,
                     spec,
                     reveal(group["id"]),
                     "bottom" if group["id"] == last_group else "mid",
-                )
+                )],
+                "bottom" if group["id"] == last_group else "mid",
             )
-        assets[f"panel{suffix}.svg"] = compose_panel(spec["width"], pieces)
     return assets
 
 
@@ -821,8 +861,15 @@ def validate(root: Path, content: dict) -> None:
     if content["intro"] != "I build full-stack applications, native tools, and computational software.":
         raise SystemExit("Introductory sentence does not match")
     readme = (root / "README.md").read_text(encoding="utf-8")
-    if readme.count(f'href="mailto:{email}"') != 1:
-        raise SystemExit("mailto target must appear in the text version")
+    if readme.count(f'href="mailto:{email}"') != 2:
+        raise SystemExit("mailto target must appear on the email line and in the text version")
+    if f">{email}</a>" not in readme:
+        raise SystemExit("The email address must be selectable text, not only an image")
+    for project in content["selected"]["projects"]:
+        if readme.count(f'href="{project["href"]}"') < 2:
+            raise SystemExit(f"Missing a clickable link for {project['name']}")
+    if readme.count(f'href="{content["website"]}"') < 2:
+        raise SystemExit("The website must be a clickable link")
     if 'alt="&gt; junguangjia"' in readme:
         raise SystemExit("The header still repeats the username")
     if 'alt="Website"' in readme or 'alt="Email"' in readme:
@@ -839,8 +886,8 @@ def validate(root: Path, content: dict) -> None:
     if names != ["ArtVenn", "Audio Transcribe", "Stochastic Trace Estimation"]:
         raise SystemExit(f"Unexpected project list: {names}")
     svgs = list((root / "readme").rglob("*.svg"))
-    if len(svgs) != 4:
-        raise SystemExit(f"Expected one animated and one static panel per width, found {len(svgs)}")
+    if len(svgs) < 8:
+        raise SystemExit(f"Too few SVG assets: {len(svgs)}")
     for path in svgs:
         text = path.read_text(encoding="utf-8")
         lowered = text.lower()
@@ -853,14 +900,13 @@ def validate(root: Path, content: dict) -> None:
             raise SystemExit(f"{path} has no outlined text")
         if path.stat().st_size > 400_000:
             raise SystemExit(f"{path} is {path.stat().st_size} bytes")
-    animated = (root / "readme" / "panel.svg").read_text(encoding="utf-8")
-    static = (root / "readme" / "panel-static.svg").read_text(encoding="utf-8")
-    mobile_static = (root / "readme" / "mobile" / "panel-static.svg").read_text(encoding="utf-8")
+    animated = (root / "readme" / "header.svg").read_text(encoding="utf-8")
+    static_files = [path for path in svgs if path.name.endswith("-static.svg")]
     if 'dur="1.1s"' not in animated or "<animate " not in animated or 'id="cursor"' not in animated:
         raise SystemExit("Heading cursor animation is missing")
     if animated.count("<animate ") < 10:
         raise SystemExit("Heading is not typed out character by character")
-    if "<animate " in static or "<animate " in mobile_static:
+    if any("<animate " in path.read_text(encoding="utf-8") for path in static_files):
         raise SystemExit("Reduced-motion assets still animate")
     if animated.count('begin="') < 12:
         raise SystemExit("The introduction does not appear after the command")
