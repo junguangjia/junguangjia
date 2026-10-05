@@ -607,10 +607,9 @@ def build_contact(fonts: Fonts, content: dict, contact: dict, spec: dict, reveal
         f'<line x1="{canvas.pad + prefix:.2f}" y1="{underline_y}" x2="{end:.2f}" y2="{underline_y}" '
         'stroke="#fdfcfc" stroke-width="1"/>'
     )
-    # The email row must be at least as tall as GitHub's link line box,
+    # The row must be at least as tall as GitHub's link line box,
     # or the browser underline opens a light gap before the next image.
-    bottom = 14 if contact["id"] == "email" else 8
-    return canvas.finish(bottom, contact["id"])
+    return canvas.finish(14, contact["id"])
 
 
 def build_heading(fonts: Fonts, label: str, spec: dict, first_gap: float, reveal: float | None) -> str:
@@ -669,7 +668,7 @@ def linked(href: str, title: str, inner: str) -> str:
     )
 
 
-ASSET_REV = "10"
+ASSET_REV = "11"
 
 
 def asset(path: str) -> str:
@@ -695,22 +694,13 @@ def contact_line(contact: dict) -> str:
     return f"{contact['prompt']} > {contact['text']}"
 
 
-def contact_html(content: dict) -> str:
-    """Real text, so the address can be selected and each contact is a link."""
-    lines = []
-    for contact in content["contacts"]:
-        lines.append(
-            "<code>"
-            f'{html.escape(contact["prompt"])} &gt; '
-            f'<a href="{html.escape(contact["href"], quote=True)}">'
-            f'{html.escape(contact["text"])}</a>'
-            "</code>"
-        )
-    return "<p>" + "<br>\n".join(lines) + "</p>"
-
-
 def build_readme(content: dict) -> str:
-    body = [module("heading-selected", "Selected")]
+    # One paragraph. Separate paragraphs were adding GitHub's block margin,
+    # which opened a white band between the introduction and the projects.
+    body = [module("header", "software · systems · machine learning. " + content["intro"])]
+    for contact in content["contacts"]:
+        body.append(linked(contact["href"], contact["text"], module(f"contact-{contact['id']}", contact_line(contact))))
+    body.append(module("heading-selected", "Selected"))
     for project in content["selected"]["projects"]:
         body.append(linked(project["href"], project["alt"], module(f"project-{project['id']}", project["alt"])))
     body.append(module("heading-stack", "Stack"))
@@ -719,10 +709,6 @@ def build_readme(content: dict) -> str:
         body.append(module(f"group-{group['id']}", f"{group['label']}: {labels}"))
     parts = [
         "<!-- Outlined with IBM Plex Mono. Edit content.json and regenerate. -->",
-        "<p>",
-        module("header", "software · systems · machine learning. " + content["intro"]),
-        "</p>",
-        contact_html(content),
         "<p>",
         "".join(body),
         "</p>",
@@ -816,12 +802,18 @@ def render_all(fonts: Fonts, content: dict, spec: dict) -> dict[str, str]:
                 build_title(fonts, content, spec, animate=motion),
                 build_intro(fonts, content, spec, reveal("intro")),
             ],
-            "all",
+            "top",
         )
+        for contact in content["contacts"]:
+            assets[f"contact-{contact['id']}{suffix}.svg"] = compose(
+                spec["width"],
+                [build_contact(fonts, content, contact, spec, reveal(contact["id"]))],
+                "mid",
+            )
         assets[f"heading-selected{suffix}.svg"] = compose(
             spec["width"],
             [build_heading(fonts, content["selected"]["label"], spec, 14, reveal("selected"))],
-            "top",
+            "mid",
         )
         for project in content["selected"]["projects"]:
             assets[f"project-{project['id']}{suffix}.svg"] = compose(
