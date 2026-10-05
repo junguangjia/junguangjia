@@ -668,7 +668,8 @@ def linked(href: str, title: str, inner: str) -> str:
     )
 
 
-ASSET_REV = "11"
+ASSET_REV = "12"
+CARD = "readme/card"
 
 
 def asset(path: str) -> str:
@@ -676,16 +677,18 @@ def asset(path: str) -> str:
 
 
 def module(name: str, alt: str) -> str:
+    # New directory on every visual revision. GitHub drops ?v= from image
+    # redirects, then the browser keeps the previous file.
     return picture(
-        asset(f"readme/{name}.svg"),
-        asset(f"readme/mobile/{name}.svg"),
+        asset(f"{CARD}/{name}.svg"),
+        asset(f"{CARD}/m/{name}.svg"),
         alt,
         [
             (
                 "(max-width: 720px) and (prefers-reduced-motion: reduce)",
-                asset(f"readme/mobile/{name}-static.svg"),
+                asset(f"{CARD}/m/{name}-static.svg"),
             ),
-            ("(prefers-reduced-motion: reduce)", asset(f"readme/{name}-static.svg")),
+            ("(prefers-reduced-motion: reduce)", asset(f"{CARD}/{name}-static.svg")),
         ],
     )
 
@@ -892,7 +895,7 @@ def validate(root: Path, content: dict) -> None:
             raise SystemExit(f"{path} has no outlined text")
         if path.stat().st_size > 400_000:
             raise SystemExit(f"{path} is {path.stat().st_size} bytes")
-    animated = (root / "readme" / "header.svg").read_text(encoding="utf-8")
+    animated = (root / "readme" / "card" / "header.svg").read_text(encoding="utf-8")
     static_files = [path for path in svgs if path.name.endswith("-static.svg")]
     if 'dur="1.1s"' not in animated or "<animate " not in animated or 'id="cursor"' not in animated:
         raise SystemExit("Heading cursor animation is missing")
@@ -931,11 +934,11 @@ def main() -> None:
     assets = root / "readme"
     if assets.exists():
         shutil.rmtree(assets)
-    (assets / "mobile").mkdir(parents=True)
+    (assets / "card" / "m").mkdir(parents=True)
     for name, svg in render_all(fonts, content, DESKTOP).items():
-        (assets / name).write_text(svg, encoding="utf-8")
+        (assets / "card" / name).write_text(svg, encoding="utf-8")
     for name, svg in render_all(fonts, content, MOBILE).items():
-        (assets / "mobile" / name).write_text(svg, encoding="utf-8")
+        (assets / "card" / "m" / name).write_text(svg, encoding="utf-8")
     (root / "README.md").write_text(build_readme(content), encoding="utf-8")
     validate(root, content)
 

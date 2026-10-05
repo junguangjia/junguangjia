@@ -32,7 +32,7 @@ Weights used: Regular, Medium, and Bold. `fsType` is 0.
 
 ## What the generator writes
 
-- One desktop card, `readme/panel.svg`, and one narrow card, `readme/mobile/panel.svg`, selected with `<picture>` at a 720px viewport
+- Card pictures in `readme/card/` and `readme/card/m/`, selected with `<picture>` at a 720px viewport
 - A static card for `prefers-reduced-motion`
 - The same words again in the Text version at the bottom of `README.md`
 
