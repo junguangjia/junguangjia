@@ -220,6 +220,37 @@ class Canvas:
         self.stops: list[tuple[float, float]] = []
         self.reveal_at: float | None = None
         self.shell = "mid"
+        # Every slice of this artwork is this tall, so scaled widths match.
+        self.slice_h = slice_unit(spec["width"], spec["name"])
+
+    def ensure_room(self, height: float) -> None:
+        """Keep an atom inside one slice. A glyph cut by the window would show a seam."""
+        unit = self.slice_h
+        if not unit:
+            return
+        if height > unit + 0.2:
+            raise SystemExit(f"A {height:.1f}px row does not fit a {unit}px slice")
+        index = int(self.y // unit)
+        pos = self.y - index * unit
+        if pos > 0.08 and pos + height > unit + 0.05:
+            self.y = (index + 1) * unit
+
+    def pad_to_slice(self) -> None:
+        unit = self.slice_h
+        if not unit:
+            return
+        ink_bottom = max((box[3] for box in self.ink), default=0.0)
+        if self.y < ink_bottom:
+            self.y = ink_bottom
+        nearest = round(self.y / unit)
+        if nearest >= 1 and abs(self.y - nearest * unit) <= 0.05 and nearest * unit >= ink_bottom - 0.01:
+            self.y = float(nearest * unit)
+            return
+        landed = int(self.y // unit)
+        if abs(self.y - landed * unit) <= 0.05 and landed * unit >= ink_bottom - 0.01:
+            self.y = float(landed * unit)
+            return
+        self.y = float((landed + 1) * unit)
 
     def measure(self, text: str, size: float, weight: str) -> float:
         return self.fonts.face(weight).width(text, size)
@@ -228,6 +259,7 @@ class Canvas:
         self.y += amount
 
     def rule(self) -> None:
+        self.ensure_room(1)
         y = round(self.y + 0.5, 2)
         x1 = self.pad
         x2 = self.width - self.edge
@@ -240,6 +272,7 @@ class Canvas:
     def line(self, runs: list[tuple[str, str, str]], size: float, leading: float = 1.45) -> float:
         """Draw one line. runs are (text, fill, weight). Returns the end x."""
         box = max(size * leading, size * (ASCENT + DESCENT) / UPEM)
+        self.ensure_room(box)
         baseline = self.y + (box - size * DESCENT / UPEM)
         x = float(self.pad)
         for text, fill, weight in runs:
@@ -390,6 +423,7 @@ class Canvas:
             lines.append(current)
         for line in lines:
             box = size * 1.7
+            self.ensure_room(box)
             baseline = self.y + (box - size * DESCENT / UPEM)
             x = float(self.pad)
             for index, tag in enumerate(line):
@@ -401,8 +435,22 @@ class Canvas:
             self.y += box
 
     def finish(self, bottom: float, label: str = "") -> tuple[float, str]:
-        self.y += bottom
+        unit = self.slice_h
+        ink_bottom = max((box[3] for box in self.ink), default=0.0)
+        if unit and bottom < 20:
+            # Trailing breathing room stays in the slice that holds the ink.
+            # Letting a few pixels of padding open the next window leaves a
+            # blank band between the title and the introduction.
+            if ink_bottom <= 0.5:
+                self.y = float(unit)
+            else:
+                last = int((ink_bottom - 0.5) // unit)
+                self.y = float((max(last, 0) + 1) * unit)
+        else:
+            self.y += bottom
+            self.pad_to_slice()
         height = self.y
+        unit = self.slice_h
         for left, top, right, bottom_edge in self.ink:
             if left < -0.4 or top < -0.4 or right > self.width + 0.4 or bottom_edge > height + 0.4:
                 raise SystemExit(
@@ -410,6 +458,12 @@ class Canvas:
                     f"box=({left:.1f},{top:.1f},{right:.1f},{bottom_edge:.1f}) "
                     f"canvas={self.width}x{height:.1f}"
                 )
+            if unit:
+                if int(top // unit) != int((bottom_edge - 0.4) // unit):
+                    raise SystemExit(
+                        f"Glyph crosses a slice boundary in {label}: "
+                        f"y={top:.1f}-{bottom_edge:.1f} unit={unit}"
+                    )
         body = "".join(self.parts)
         if self.reveal_at is not None:
             body = f'<g opacity="0">{body}{reveal_animation(self.reveal_at)}</g>'
@@ -429,18 +483,41 @@ def rounded_rect(x: float, y: float, w: float, h: float, r: float) -> str:
 # GitHub lays these pictures out inline. A repository README line box is 24px
 # (16px type, line-height 1.5) and a profile README line box is 21px. A slice
 # shorter than that box leaves a white band, so the card edge steps.
-# The narrowest column that still shows each asset, measured on the profile
-# and the repository page: desktop from 1200px up stays about 750px, the
-# in-between asset covers the sidebar squeeze down to about 400px, and the
-# phone asset goes down to about 210px. Two extra pixels cover subpixel rounding.
+#
+# The same images also step sideways. iOS (and any layout that rounds the
+# used height, then derives the width from the aspect ratio) gives each slice
+# a different width when the heights differ. Linked and unlinked slices do
+# this independently, and the GitHub iOS app sometimes ignores <picture> and
+# paints the 960px <img> fallback in a phone column. Every slice in one
+# artwork therefore shares one height. The desktop height is tall enough for
+# that fallback at a ~250px column; the medium artwork covers the sidebar
+# squeeze; the phone artwork covers a padded phone.
 BLEED = 2
-NARROWEST_COLUMN = {"desktop": 720, "medium": 390, "mobile": 210}
+NARROWEST_COLUMN = {"desktop": 250, "medium": 360, "mobile": 210}
+LINE_BOX = 24
+
+
+def slice_unit(width: int, name: str) -> int:
+    """Shared slice height for one artwork.
+
+    Rendered height at the narrowest column is at least the line box. One
+    extra source pixel absorbs a layout that rounds the used height down.
+    The phone unit is also tall enough for the two-line title plus its inset,
+    so that pair stays in one window instead of opening a gap mid-heading.
+    """
+    narrowest = NARROWEST_COLUMN[name]
+    unit = (LINE_BOX * width + narrowest - 1) // narrowest + 1
+    # The phone title is two lines plus the top inset, about 88px. The same
+    # floor on the in-between artwork keeps it from splitting one line into
+    # more windows than the phone, which would force every artwork to add a
+    # blank window.
+    if name in ("mobile", "medium"):
+        unit = max(unit, 88)
+    return unit
 
 
 def min_slice_height(width: int, name: str) -> int:
-    line_box = 24
-    narrowest = NARROWEST_COLUMN[name]
-    return (line_box * width + narrowest - 1) // narrowest + 2
+    return slice_unit(width, name)
 
 
 def piece_frame(width: int, height: int, shape: str) -> str:
@@ -461,24 +538,62 @@ def piece_frame(width: int, height: int, shape: str) -> str:
             f"Q0,{height} 0,{height - radius}H{-BLEED}Z"
         )
     else:
-        return (
-            f'<rect x="{-BLEED}" y="{-BLEED}" width="{width + BLEED * 2}" '
-            f'height="{height + BLEED * 2}" fill="{BG}"/>'
-        )
+        path = f"M{-BLEED},{-BLEED}H{width + BLEED}V{height + BLEED}H{-BLEED}Z"
     return f'<path d="{path}" fill="{BG}"/>'
 
 
-def compose(width: int, pieces: list[tuple[float, str]], shape: str, name: str) -> str:
+class Block:
+    def __init__(self, name: str, shape: str, width: int, unit: int, height: int, body: str) -> None:
+        if height % unit != 0:
+            raise SystemExit(f"{name} height {height} is not a multiple of the {unit}px slice")
+        self.name = name
+        self.shape = shape
+        self.width = width
+        self.unit = unit
+        self.height = height
+        self.body = body
+
+    @property
+    def count(self) -> int:
+        return self.height // self.unit
+
+
+def stack_block(name: str, width: int, pieces: list[tuple[float, str]], shape: str, spec_name: str) -> Block:
+    unit = slice_unit(width, spec_name)
     y = 0.0
     groups: list[str] = []
     for height, body in pieces:
+        snapped = int(round(height))
+        if abs(height - snapped) > 0.05 or snapped % unit != 0:
+            raise SystemExit(f"{name} piece is {height:.2f}px, not a multiple of {unit}")
         groups.append(f'<g transform="translate(0,{y:.2f})">{body}</g>')
-        y += height
-    pixel_height = max(int(round(y)), min_slice_height(width, name))
+        y += snapped
+    total = int(round(y))
+    return Block(name, shape, width, unit, total, "".join(groups))
+
+
+def slice_shape(shape: str, index: int, count: int) -> str:
+    if count == 1:
+        return shape
+    if index == 0 and shape in ("top", "all"):
+        return "top"
+    if index == count - 1 and shape in ("bottom", "all"):
+        return "bottom"
+    return "mid"
+
+
+def render_slice(block: Block, index: int, count: int) -> str:
+    unit = block.unit
+    offset = index * unit
+    frame = piece_frame(block.width, unit, slice_shape(block.shape, index, count))
+    # Trailing slices forced by a taller artwork are empty dark bands.
+    # Windows that overlap the drawing include the whole drawing and clip it,
+    # so a cursor that travels across a boundary stays on one timeline.
+    body = block.body if offset < block.height else ""
     return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{pixel_height}" '
-        f'viewBox="0 0 {width} {pixel_height}" overflow="hidden">'
-        f"{piece_frame(width, pixel_height, shape)}{''.join(groups)}</svg>\n"
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{block.width}" height="{unit}" '
+        f'viewBox="0 {offset} {block.width} {unit}" overflow="hidden">'
+        f'<g transform="translate(0,{offset})">{frame}</g>{body}</svg>\n'
     )
 
 
@@ -591,9 +706,10 @@ def build_group(
     canvas.line([(group["label"], TEXT, "bold")], spec["group"], 1.25)
     canvas.spacer(6)
     nest(canvas, spec, 3)
+    limit = spec["width"] - canvas.edge
+    canvas.ensure_room(CHIP_H)
     x = float(canvas.pad)
     y = canvas.y
-    limit = spec["width"] - canvas.edge
     row_bottom = y + CHIP_H
     for item_id in group["items"]:
         if item_id not in content["badges"] or item_id not in BADGE_STYLE:
@@ -602,7 +718,9 @@ def build_group(
         style = BADGE_STYLE[item_id]
         width = chip_width(fonts, label, bool(style["icon"]))
         if x > canvas.pad and x + width > limit + 0.4:
-            y = row_bottom + CHIP_GAP
+            canvas.y = row_bottom + CHIP_GAP
+            canvas.ensure_room(CHIP_H)
+            y = canvas.y
             x = float(canvas.pad)
             row_bottom = y + CHIP_H
         draw_chip(canvas, fonts, label, style, x, y)
@@ -691,7 +809,7 @@ def linked(href: str, title: str, inner: str) -> str:
     )
 
 
-ASSET_REV = "13"
+ASSET_REV = "14"
 CARD = "readme/card"
 
 
@@ -728,19 +846,33 @@ def contact_line(contact: dict) -> str:
     return f"{contact['prompt']} > {contact['text']}"
 
 
-def build_readme(content: dict) -> str:
+def block_pictures(name: str, alt: str, count: int) -> str:
+    parts: list[str] = []
+    for index in range(count):
+        stem = name if index == 0 else f"{name}-{index + 1}"
+        # The first window carries the description. The rest are the same card.
+        parts.append(module(stem, alt if index == 0 else ""))
+    return "".join(parts)
+
+
+def build_readme(content: dict, counts: dict[str, int]) -> str:
     # One paragraph. Separate paragraphs were adding GitHub's block margin,
     # which opened a white band between the introduction and the projects.
-    body = [module("header", "software · systems · machine learning. " + content["intro"])]
+    # A block can be several equal windows so a tall drawing and a one-line
+    # drawing share one aspect ratio. The windows of a link stay inside one <a>.
+    body = [block_pictures("header", "software · systems · machine learning. " + content["intro"], counts["header"])]
     for contact in content["contacts"]:
-        body.append(linked(contact["href"], contact["text"], module(f"contact-{contact['id']}", contact_line(contact))))
-    body.append(module("heading-selected", "Selected"))
+        name = f"contact-{contact['id']}"
+        body.append(linked(contact["href"], contact["text"], block_pictures(name, contact_line(contact), counts[name])))
+    body.append(block_pictures("heading-selected", "Selected", counts["heading-selected"]))
     for project in content["selected"]["projects"]:
-        body.append(linked(project["href"], project["alt"], module(f"project-{project['id']}", project["alt"])))
-    body.append(module("heading-stack", "Stack"))
+        name = f"project-{project['id']}"
+        body.append(linked(project["href"], project["alt"], block_pictures(name, project["alt"], counts[name])))
+    body.append(block_pictures("heading-stack", "Stack", counts["heading-stack"]))
     for group in content["stack"]["groups"]:
         labels = ", ".join(content["badges"][item] for item in group["items"])
-        body.append(module(f"group-{group['id']}", f"{group['label']}: {labels}"))
+        name = f"group-{group['id']}"
+        body.append(block_pictures(name, f"{group['label']}: {labels}", counts[name]))
     parts = [
         "<!-- Outlined with IBM Plex Mono. Edit content.json and regenerate. -->",
         "<p>",
@@ -823,63 +955,64 @@ def schedule(content: dict, spec: dict) -> dict[str, float]:
     return times
 
 
-def render_all(fonts: Fonts, content: dict, spec: dict) -> dict[str, str]:
-    assets: dict[str, str] = {}
+def render_blocks(fonts: Fonts, content: dict, spec: dict, animate: bool) -> dict[str, Block]:
     times = schedule(content, spec)
     last_group = content["stack"]["groups"][-1]["id"]
-    for motion in (True, False):
-        suffix = "" if motion else "-static"
-        reveal = (lambda key: times[key]) if motion else (lambda key: None)
-        assets[f"header{suffix}.svg"] = compose(
+    reveal = (lambda key: times[key]) if animate else (lambda key: None)
+    blocks: dict[str, Block] = {}
+    blocks["header"] = stack_block(
+        "header",
+        spec["width"],
+        [
+            build_title(fonts, content, spec, animate=animate),
+            build_intro(fonts, content, spec, reveal("intro")),
+        ],
+        "top",
+        spec["name"],
+    )
+    for contact in content["contacts"]:
+        name = f"contact-{contact['id']}"
+        blocks[name] = stack_block(
+            name,
             spec["width"],
-            [
-                build_title(fonts, content, spec, animate=motion),
-                build_intro(fonts, content, spec, reveal("intro")),
-            ],
-            "top",
-            spec["name"],
-        )
-        for contact in content["contacts"]:
-            assets[f"contact-{contact['id']}{suffix}.svg"] = compose(
-                spec["width"],
-                [build_contact(fonts, content, contact, spec, reveal(contact["id"]))],
-                "mid",
-                spec["name"],
-            )
-        assets[f"heading-selected{suffix}.svg"] = compose(
-            spec["width"],
-            [build_heading(fonts, content["selected"]["label"], spec, 14, reveal("selected"))],
+            [build_contact(fonts, content, contact, spec, reveal(contact["id"]))],
             "mid",
             spec["name"],
         )
-        for project in content["selected"]["projects"]:
-            assets[f"project-{project['id']}{suffix}.svg"] = compose(
-                spec["width"],
-                [build_project(fonts, project, spec, reveal(project["id"]))],
-                "mid",
-                spec["name"],
-            )
-        assets[f"heading-stack{suffix}.svg"] = compose(
+    blocks["heading-selected"] = stack_block(
+        "heading-selected",
+        spec["width"],
+        [build_heading(fonts, content["selected"]["label"], spec, 14, reveal("selected"))],
+        "mid",
+        spec["name"],
+    )
+    for project in content["selected"]["projects"]:
+        name = f"project-{project['id']}"
+        blocks[name] = stack_block(
+            name,
             spec["width"],
-            [build_heading(fonts, content["stack"]["label"], spec, 12, reveal("stack"))],
+            [build_project(fonts, project, spec, reveal(project["id"]))],
             "mid",
             spec["name"],
         )
-        for group in content["stack"]["groups"]:
-            assets[f"group-{group['id']}{suffix}.svg"] = compose(
-                spec["width"],
-                [build_group(
-                    fonts,
-                    content,
-                    group,
-                    spec,
-                    reveal(group["id"]),
-                    "bottom" if group["id"] == last_group else "mid",
-                )],
-                "bottom" if group["id"] == last_group else "mid",
-                spec["name"],
-            )
-    return assets
+    blocks["heading-stack"] = stack_block(
+        "heading-stack",
+        spec["width"],
+        [build_heading(fonts, content["stack"]["label"], spec, 12, reveal("stack"))],
+        "mid",
+        spec["name"],
+    )
+    for group in content["stack"]["groups"]:
+        name = f"group-{group['id']}"
+        shape = "bottom" if group["id"] == last_group else "mid"
+        blocks[name] = stack_block(
+            name,
+            spec["width"],
+            [build_group(fonts, content, group, spec, reveal(group["id"]), shape)],
+            shape,
+            spec["name"],
+        )
+    return blocks
 
 
 def validate(root: Path, content: dict) -> None:
@@ -938,14 +1071,19 @@ def validate(root: Path, content: dict) -> None:
         slice_width, slice_height = int(size.group(1)), int(size.group(2))
         posix = path.as_posix()
         kind = "mobile" if "/card/m/" in posix else "medium" if "/card/w/" in posix else "desktop"
-        floor = min_slice_height(slice_width, kind)
-        if slice_height < floor:
-            raise SystemExit(f"{path} is {slice_height}px tall, under the {floor}px line-box floor")
+        unit = slice_unit(slice_width, kind)
+        if slice_height != unit:
+            raise SystemExit(f"{path} is {slice_width}x{slice_height}, expected height {unit}")
+        view = re.search(rf'viewBox="0 (\d+) {slice_width} {slice_height}"', text)
+        if not view:
+            raise SystemExit(f"{path} viewBox does not match its viewport")
         if 'x="-2"' not in text and "M-2," not in text:
             raise SystemExit(f"{path} background does not bleed past the viewport")
         if path.stat().st_size > 400_000:
             raise SystemExit(f"{path} is {path.stat().st_size} bytes")
-    animated = (root / "readme" / "card" / "header.svg").read_text(encoding="utf-8")
+    header_slices = sorted((root / "readme" / "card").glob("header*.svg"))
+    header_slices = [path for path in header_slices if not path.name.endswith("-static.svg")]
+    animated = "\n".join(path.read_text(encoding="utf-8") for path in header_slices)
     static_files = [path for path in svgs if path.name.endswith("-static.svg")]
     if 'dur="1.1s"' not in animated or "<animate " not in animated or 'id="cursor"' not in animated:
         raise SystemExit("Heading cursor animation is missing")
@@ -957,6 +1095,46 @@ def validate(root: Path, content: dict) -> None:
         raise SystemExit("The introduction does not appear after the command")
     if 'stroke="#007aff"' in animated:
         raise SystemExit("The heading is still underlined")
+    kinds = ("desktop", "medium", "mobile")
+
+    def kind_of(path: Path) -> str:
+        posix = path.as_posix()
+        if "/card/m/" in posix:
+            return "mobile"
+        if "/card/w/" in posix:
+            return "medium"
+        return "desktop"
+
+    def slice_id(path: Path) -> tuple[str, int]:
+        base = path.name[:-len("-static.svg")] if path.name.endswith("-static.svg") else path.name[:-len(".svg")]
+        numbered = re.fullmatch(r"(.+)-(\d+)", base)
+        if numbered and int(numbered.group(2)) >= 2:
+            return numbered.group(1), int(numbered.group(2))
+        return base, 1
+
+    indexes: dict[tuple[str, bool], set[tuple[str, int]]] = {}
+    heights: dict[str, set[int]] = {}
+    for path in svgs:
+        kind = kind_of(path)
+        static = path.name.endswith("-static.svg")
+        indexes.setdefault((kind, static), set()).add(slice_id(path))
+        text = path.read_text(encoding="utf-8")
+        height = int(re.search(r'\bheight="(\d+)"', text).group(1))
+        heights.setdefault(kind, set()).add(height)
+    for kind in kinds:
+        if len(heights[kind]) != 1:
+            raise SystemExit(f"{kind} slices do not share one height: {heights[kind]}")
+        if indexes[(kind, False)] != indexes[(kind, True)]:
+            raise SystemExit(f"{kind} animated and static slices do not match")
+    if not (indexes[("desktop", False)] == indexes[("medium", False)] == indexes[("mobile", False)]):
+        raise SystemExit("Artworks do not have the same slice windows")
+    for kind in kinds:
+        sample = next(path for path in svgs if kind_of(path) == kind)
+        width = int(re.search(r'\bwidth="(\d+)"', sample.read_text(encoding="utf-8")).group(1))
+        column = NARROWEST_COLUMN[kind]
+        rendered = column * next(iter(heights[kind])) / width
+        if rendered < LINE_BOX:
+            raise SystemExit(f"{kind} renders at {rendered:.2f}px in a {column}px column")
     font_files = list(root.rglob("*.otf")) + list(root.rglob("*.ttf")) + list(root.rglob("*.woff")) + list(root.rglob("*.woff2"))
     if font_files:
         raise SystemExit(f"Font files must not be committed: {font_files}")
@@ -984,18 +1162,43 @@ def main() -> None:
     assets = root / "readme"
     if assets.exists():
         shutil.rmtree(assets)
-    (assets / "card" / "m").mkdir(parents=True)
-    (assets / "card" / "w").mkdir(parents=True)
-    for name, svg in render_all(fonts, content, DESKTOP).items():
-        (assets / "card" / name).write_text(svg, encoding="utf-8")
-    for name, svg in render_all(fonts, content, MEDIUM).items():
-        (assets / "card" / "w" / name).write_text(svg, encoding="utf-8")
-    for name, svg in render_all(fonts, content, MOBILE).items():
-        (assets / "card" / "m" / name).write_text(svg, encoding="utf-8")
-    (root / "README.md").write_text(build_readme(content), encoding="utf-8")
+    directories = {
+        "desktop": assets / "card",
+        "medium": assets / "card" / "w",
+        "mobile": assets / "card" / "m",
+    }
+    for directory in directories.values():
+        directory.mkdir(parents=True)
+    specs = {"desktop": DESKTOP, "medium": MEDIUM, "mobile": MOBILE}
+    rendered = {
+        name: {motion: render_blocks(fonts, content, spec, motion) for motion in (True, False)}
+        for name, spec in specs.items()
+    }
+    names = list(rendered["desktop"][True])
+    counts: dict[str, int] = {}
+    for name in names:
+        counts[name] = max(rendered[artwork][True][name].count for artwork in specs)
+        for artwork in specs:
+            animated = rendered[artwork][True][name]
+            static = rendered[artwork][False][name]
+            if animated.height != static.height or animated.unit != static.unit:
+                raise SystemExit(f"{artwork} {name} changes size when motion is removed")
+    for artwork, directory in directories.items():
+        for motion, suffix in ((True, ""), (False, "-static")):
+            for name, block in rendered[artwork][motion].items():
+                count = counts[name]
+                for index in range(count):
+                    stem = name if index == 0 else f"{name}-{index + 1}"
+                    filename = f"{stem}{suffix}.svg"
+                    (directory / filename).write_text(render_slice(block, index, count), encoding="utf-8")
+    (root / "README.md").write_text(build_readme(content, counts), encoding="utf-8")
     validate(root, content)
 
     print(f"IBM Plex Mono {fonts.face('bold').font['name'].getDebugName(5)}")
+    for artwork in specs:
+        sample = next(iter(rendered[artwork][True].values()))
+        windows = ", ".join(f"{name}×{counts[name]}" for name in names)
+        print(f"{artwork} {sample.width}x{sample.unit} windows: {windows}")
     total = sum(path.stat().st_size for path in (root / "readme").rglob("*.svg"))
     print(f"svg bytes: {total}")
 
