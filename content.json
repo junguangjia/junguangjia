@@ -3,6 +3,7 @@
   "website": "https://junguangjia.github.io/",
   "heading": {
     "desktop": ["software · systems · machine learning"],
+    "medium": ["software · systems · machine learning"],
     "mobile": ["software · systems", "machine learning"]
   },
   "intro": "I build full-stack applications, native tools, and computational software.",

@@ -32,11 +32,15 @@ Weights used: Regular, Medium, and Bold. `fsType` is 0.
 
 ## What the generator writes
 
-- Card pictures in `readme/card/` and `readme/card/m/`, selected with `<picture>` at a 720px viewport
+- Card pictures in `readme/card/`, `readme/card/w/`, and `readme/card/m/`, selected with `<picture>` at 1200px and 720px viewports
 - A static card for `prefers-reduced-motion`
 - The same words again in the Text version at the bottom of `README.md`
 
 The card is one run of pictures inside a single paragraph, so GitHub's paragraph margin does not open a white band through the middle. Email and the website are picture links in that run. The address is also real text in the text version, where it can be selected and copied. Each project picture is a link.
+
+GitHub keeps every picture on the line box of the markdown (24px on a repository README, 21px on the profile). A slice shorter than that box leaves a white band. From about 770px to 1100px the sidebar narrows the column to around 400px, which is what `readme/card/w/` is for. The GitHub iOS app sometimes ignores `<picture>` and shows the 960px file in a phone column, so the desktop slices are tall enough there too.
+
+Side edges step for a second reason. The app rounds each picture's height, then derives the width from that picture's aspect ratio. Different heights become different widths, including between a linked slice and the slice above it. Every window in one artwork is therefore the same height (the same ratio). A tall block is several of those windows, clipped from one drawing, and a link keeps all of its windows inside one anchor. The phone windows are tall enough that the two-line title stays in one piece. The fill still runs a little past the viewport so scaling clips a solid edge.
 
 The heading is `software · systems · machine learning`, with a separate blinking underscore in the next monospace cell. On a narrow screen it breaks before “machine learning” so the type stays readable. The heading types out like a command, then the indented lines appear in order, like a program printing. The cursor keeps its 1.1-second blink. Reduced motion, and any viewer where animation does not run, shows the finished text immediately. Website and email are indented code lines: `email > junguang.jia@columbia.edu` and `web > junguangjia.github.io`.
 
