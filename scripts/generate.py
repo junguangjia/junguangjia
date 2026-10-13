@@ -45,6 +45,16 @@ DESKTOP = {
     "tag": 12,
     "group": 13,
 }
+MEDIUM = {
+    "name": "medium",
+    "width": 640,
+    "pad": 18,
+    "title": 16,
+    "body": 13,
+    "heading": 13,
+    "tag": 12,
+    "group": 13,
+}
 MOBILE = {
     "name": "mobile",
     "width": 340,
@@ -186,13 +196,13 @@ def reveal_animation(when: float) -> str:
 
 
 def nest(canvas: "Canvas", spec: dict, level: int) -> None:
-    unit = 16 if spec["name"] == "desktop" else 10
+    unit = {"desktop": 16, "medium": 14, "mobile": 10}[spec["name"]]
     canvas.pad = spec["pad"] + level * unit
 
 
 def shell_pad(spec: dict) -> float:
     # Equal outer margin above the title letters and below the last badge row.
-    return 72 if spec["name"] == "desktop" else 44
+    return {"desktop": 72, "medium": 56, "mobile": 44}[spec["name"]]
 
 
 class Canvas:
@@ -416,37 +426,58 @@ def rounded_rect(x: float, y: float, w: float, h: float, r: float) -> str:
     )
 
 
+# GitHub lays these pictures out inline. A repository README line box is 24px
+# (16px type, line-height 1.5) and a profile README line box is 21px. A slice
+# shorter than that box leaves a white band, so the card edge steps.
+# The narrowest column that still shows each asset, measured on the profile
+# and the repository page: desktop from 1200px up stays about 750px, the
+# in-between asset covers the sidebar squeeze down to about 400px, and the
+# phone asset goes down to about 210px. Two extra pixels cover subpixel rounding.
+BLEED = 2
+NARROWEST_COLUMN = {"desktop": 720, "medium": 390, "mobile": 210}
+
+
+def min_slice_height(width: int, name: str) -> int:
+    line_box = 24
+    narrowest = NARROWEST_COLUMN[name]
+    return (line_box * width + narrowest - 1) // narrowest + 2
+
+
 def piece_frame(width: int, height: int, shape: str) -> str:
-    """Filled card edge. No per-slice stroke, so a phone cannot step the border."""
+    """Filled card edge. The fill runs past the viewport so scaling clips a solid edge."""
     radius = 12 if height > 28 else max(4, height // 4)
     if shape == "all":
-        path = rounded_rect(0, 0, width, height, radius)
+        path = rounded_rect(-BLEED, -BLEED, width + BLEED * 2, height + BLEED * 2, radius)
     elif shape == "top":
         path = (
-            f"M0,{height}H{width}V{radius}"
-            f"Q{width},0 {width - radius},0H{radius}Q0,0 0,{radius}Z"
+            f"M{-BLEED},{height + BLEED}H{width + BLEED}V{radius}"
+            f"H{width}Q{width},0 {width - radius},0H{radius}"
+            f"Q0,0 0,{radius}H{-BLEED}Z"
         )
     elif shape == "bottom":
         path = (
-            f"M0,0H{width}V{height - radius}"
-            f"Q{width},{height} {width - radius},{height}H{radius}"
-            f"Q0,{height} 0,{height - radius}Z"
+            f"M{-BLEED},{-BLEED}H{width + BLEED}V{height - radius}"
+            f"H{width}Q{width},{height} {width - radius},{height}H{radius}"
+            f"Q0,{height} 0,{height - radius}H{-BLEED}Z"
         )
     else:
-        return f'<rect width="{width}" height="{height}" fill="{BG}"/>'
+        return (
+            f'<rect x="{-BLEED}" y="{-BLEED}" width="{width + BLEED * 2}" '
+            f'height="{height + BLEED * 2}" fill="{BG}"/>'
+        )
     return f'<path d="{path}" fill="{BG}"/>'
 
 
-def compose(width: int, pieces: list[tuple[float, str]], shape: str) -> str:
+def compose(width: int, pieces: list[tuple[float, str]], shape: str, name: str) -> str:
     y = 0.0
     groups: list[str] = []
     for height, body in pieces:
         groups.append(f'<g transform="translate(0,{y:.2f})">{body}</g>')
         y += height
-    pixel_height = int(round(y))
+    pixel_height = max(int(round(y)), min_slice_height(width, name))
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{pixel_height}" '
-        f'viewBox="0 0 {width} {pixel_height}">'
+        f'viewBox="0 0 {width} {pixel_height}" overflow="hidden">'
         f"{piece_frame(width, pixel_height, shape)}{''.join(groups)}</svg>\n"
     )
 
@@ -628,7 +659,7 @@ def build_project(fonts: Fonts, project: dict, spec: dict, reveal: float | None)
     canvas = Canvas(fonts, spec)
     canvas.reveal_at = reveal
     nest(canvas, spec, 2)
-    canvas.spacer(8 if spec["name"] == "desktop" else 6)
+    canvas.spacer(6 if spec["name"] == "mobile" else 8)
     size = spec["heading"]
     canvas.line([("## ", MUTED, "regular"), (project["name"], TEXT, "bold")], size, 1.3)
     canvas.spacer(4)
@@ -638,23 +669,15 @@ def build_project(fonts: Fonts, project: dict, spec: dict, reveal: float | None)
     canvas.tags(project["tags"], spec["tag"])
     # GitHub draws the link underline under the image. Extra dark padding
     # keeps that line from opening a light gap before the next slice.
-    return canvas.finish(16 if spec["name"] == "desktop" else 14, "project")
+    return canvas.finish(14 if spec["name"] == "mobile" else 16, "project")
 
 
-def picture(
-    desktop: str,
-    mobile: str,
-    alt: str,
-    sources: list[tuple[str, str]] | None = None,
-) -> str:
-    extra = ""
-    if sources:
-        extra = "".join(f'<source media="{media}" srcset="{src}">' for media, src in sources)
+def picture(desktop: str, alt: str, sources: list[tuple[str, str]]) -> str:
+    tags = "".join(f'<source media="{media}" srcset="{src}">' for media, src in sources)
     # One shared pixel width. A percentage width was resolving to a different
     # size for each slice in the GitHub iOS app, which stepped the card edge.
     return (
-        f'<picture>{extra}'
-        f'<source media="(max-width: 720px)" srcset="{mobile}">'
+        f"<picture>{tags}"
         f'<img src="{desktop}" width="{DESKTOP["width"]}" align="top" '
         f'alt="{html.escape(alt, quote=True)}">'
         f"</picture>"
@@ -668,7 +691,7 @@ def linked(href: str, title: str, inner: str) -> str:
     )
 
 
-ASSET_REV = "12"
+ASSET_REV = "13"
 CARD = "readme/card"
 
 
@@ -679,16 +702,24 @@ def asset(path: str) -> str:
 def module(name: str, alt: str) -> str:
     # New directory on every visual revision. GitHub drops ?v= from image
     # redirects, then the browser keeps the previous file.
+    # First matching source wins. The in-between set covers window widths
+    # where the sidebar has already narrowed the column but the viewport is
+    # still under 1200px, so the wide artwork would scale below the line box.
     return picture(
         asset(f"{CARD}/{name}.svg"),
-        asset(f"{CARD}/m/{name}.svg"),
         alt,
         [
             (
                 "(max-width: 720px) and (prefers-reduced-motion: reduce)",
                 asset(f"{CARD}/m/{name}-static.svg"),
             ),
+            (
+                "(max-width: 1199px) and (prefers-reduced-motion: reduce)",
+                asset(f"{CARD}/w/{name}-static.svg"),
+            ),
             ("(prefers-reduced-motion: reduce)", asset(f"{CARD}/{name}-static.svg")),
+            ("(max-width: 720px)", asset(f"{CARD}/m/{name}.svg")),
+            ("(max-width: 1199px)", asset(f"{CARD}/w/{name}.svg")),
         ],
     )
 
@@ -806,28 +837,33 @@ def render_all(fonts: Fonts, content: dict, spec: dict) -> dict[str, str]:
                 build_intro(fonts, content, spec, reveal("intro")),
             ],
             "top",
+            spec["name"],
         )
         for contact in content["contacts"]:
             assets[f"contact-{contact['id']}{suffix}.svg"] = compose(
                 spec["width"],
                 [build_contact(fonts, content, contact, spec, reveal(contact["id"]))],
                 "mid",
+                spec["name"],
             )
         assets[f"heading-selected{suffix}.svg"] = compose(
             spec["width"],
             [build_heading(fonts, content["selected"]["label"], spec, 14, reveal("selected"))],
             "mid",
+            spec["name"],
         )
         for project in content["selected"]["projects"]:
             assets[f"project-{project['id']}{suffix}.svg"] = compose(
                 spec["width"],
                 [build_project(fonts, project, spec, reveal(project["id"]))],
                 "mid",
+                spec["name"],
             )
         assets[f"heading-stack{suffix}.svg"] = compose(
             spec["width"],
             [build_heading(fonts, content["stack"]["label"], spec, 12, reveal("stack"))],
             "mid",
+            spec["name"],
         )
         for group in content["stack"]["groups"]:
             assets[f"group-{group['id']}{suffix}.svg"] = compose(
@@ -841,6 +877,7 @@ def render_all(fonts: Fonts, content: dict, spec: dict) -> dict[str, str]:
                     "bottom" if group["id"] == last_group else "mid",
                 )],
                 "bottom" if group["id"] == last_group else "mid",
+                spec["name"],
             )
     return assets
 
@@ -851,6 +888,8 @@ def validate(root: Path, content: dict) -> None:
         raise SystemExit(f"Email must be exactly {EMAIL}")
     if content["heading"]["desktop"] != ["software · systems · machine learning"]:
         raise SystemExit("Desktop heading must be exactly software · systems · machine learning")
+    if content["heading"]["medium"] != ["software · systems · machine learning"]:
+        raise SystemExit("Medium heading must stay on one line")
     if content["heading"]["mobile"] != ["software · systems", "machine learning"]:
         raise SystemExit("Mobile heading must break before machine learning")
     if content["intro"] != "I build full-stack applications, native tools, and computational software.":
@@ -893,6 +932,17 @@ def validate(root: Path, content: dict) -> None:
             raise SystemExit(f"{path} references an external resource")
         if "<path " not in text:
             raise SystemExit(f"{path} has no outlined text")
+        size = re.search(r'\bwidth="(\d+)" height="(\d+)"', text)
+        if not size:
+            raise SystemExit(f"{path} has no viewport size")
+        slice_width, slice_height = int(size.group(1)), int(size.group(2))
+        posix = path.as_posix()
+        kind = "mobile" if "/card/m/" in posix else "medium" if "/card/w/" in posix else "desktop"
+        floor = min_slice_height(slice_width, kind)
+        if slice_height < floor:
+            raise SystemExit(f"{path} is {slice_height}px tall, under the {floor}px line-box floor")
+        if 'x="-2"' not in text and "M-2," not in text:
+            raise SystemExit(f"{path} background does not bleed past the viewport")
         if path.stat().st_size > 400_000:
             raise SystemExit(f"{path} is {path.stat().st_size} bytes")
     animated = (root / "readme" / "card" / "header.svg").read_text(encoding="utf-8")
@@ -935,8 +985,11 @@ def main() -> None:
     if assets.exists():
         shutil.rmtree(assets)
     (assets / "card" / "m").mkdir(parents=True)
+    (assets / "card" / "w").mkdir(parents=True)
     for name, svg in render_all(fonts, content, DESKTOP).items():
         (assets / "card" / name).write_text(svg, encoding="utf-8")
+    for name, svg in render_all(fonts, content, MEDIUM).items():
+        (assets / "card" / "w" / name).write_text(svg, encoding="utf-8")
     for name, svg in render_all(fonts, content, MOBILE).items():
         (assets / "card" / "m" / name).write_text(svg, encoding="utf-8")
     (root / "README.md").write_text(build_readme(content), encoding="utf-8")

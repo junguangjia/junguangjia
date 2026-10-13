@@ -32,11 +32,13 @@ Weights used: Regular, Medium, and Bold. `fsType` is 0.
 
 ## What the generator writes
 
-- Card pictures in `readme/card/` and `readme/card/m/`, selected with `<picture>` at a 720px viewport
+- Card pictures in `readme/card/`, `readme/card/w/`, and `readme/card/m/`, selected with `<picture>` at 1200px and 720px viewports
 - A static card for `prefers-reduced-motion`
 - The same words again in the Text version at the bottom of `README.md`
 
 The card is one run of pictures inside a single paragraph, so GitHub's paragraph margin does not open a white band through the middle. Email and the website are picture links in that run. The address is also real text in the text version, where it can be selected and copied. Each project picture is a link.
+
+GitHub keeps every picture on the line box of the markdown (24px on a repository README, 21px on the profile). From about 770px to 1100px the sidebar narrows that column to around 400px, and a 960px slice scaled that far is shorter than the line box, so a white band opens and the side edge steps. The in-between pictures in `readme/card/w/` cover that range. Every slice is also at least as tall as the line box at the narrowest column that still shows it, and the fill runs a little past the viewport so the clipped edge stays solid as the window scales.
 
 The heading is `software · systems · machine learning`, with a separate blinking underscore in the next monospace cell. On a narrow screen it breaks before “machine learning” so the type stays readable. The heading types out like a command, then the indented lines appear in order, like a program printing. The cursor keeps its 1.1-second blink. Reduced motion, and any viewer where animation does not run, shows the finished text immediately. Website and email are indented code lines: `email > junguang.jia@columbia.edu` and `web > junguangjia.github.io`.
 
